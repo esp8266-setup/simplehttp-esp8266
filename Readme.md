@@ -46,15 +46,30 @@ static shttpResponse *custom404(shttpRequest *request) {
 void main(void) {
     shttpConfig config;
 
+    // set a hostname, if a request with a different host header
+    // arrives the server will automatically return 404
     config.hostname = "esp8266";
+
+    // the port to use, default should be 80
     config.port = 80;
+
+    // we don't care if the url ends with a slash
     config.appendSlashes = 1;
+
+    // now define three routes
     config.routes = {
+        // first route has a parameter
         { shttpMethodGET, "/hello/?", helloName },
-        { shttpMethodGET, "/hello",   helloUnknown },
-        { shttpMethodGET, "*",        custom404 }
+
+        // second route is essentially the same as the first but will
+        // only be called if there is no parameter
+        { shttpMethodGET, "/hello", helloUnknown },
+
+        // this route is a catchall and just returns 404
+        { shttpMethodGET, "*", custom404 }
     };
 
+    // start the server, this never returns
     shttp_listen(&config);
 }
 ```
