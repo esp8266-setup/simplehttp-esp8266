@@ -1,3 +1,6 @@
+#ifndef shttp_http_h_included
+#define shttp_http_h_included
+
 // simple key/value struct, re-used for headers and parameters
 typedef struct _shttpKeyValue {
     char *name;
@@ -176,3 +179,5 @@ shttpResponse *shttp_download_response(shttpStatusCode status, uint32_t len, cha
 // return a download with the callback interface to conserve memory
 // if len is set to 0 the connection will be terminated after finishing
 shttpResponse *shttp_download_callback_response(shttpStatusCode status, uint32_t len, shttpBodyCallback callback, void *userData, shttpCleanupCallback cleanup);
+
+#endif /* shttp_http_h_included */
