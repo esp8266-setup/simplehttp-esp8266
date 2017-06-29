@@ -46,9 +46,13 @@ typedef struct _shttpRequest {
     uint8_t numHeaders;
 
     // URL parameters
-    shttpParameter *parameter;
+    shttpParameter *parameters;
     // number of parameters
     uint8_t numParameters;
+
+    // request body
+    char *bodyData;
+    uint8_t bodyLen;
 } shttpRequest;
 
 // HTTP status code to make code more readable
