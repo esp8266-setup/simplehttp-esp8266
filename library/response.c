@@ -4,9 +4,11 @@ shttpResponse *shttp_empty_response(shttpStatusCode status) {
     
 }
 
+#if SHTTP_CJSON
 shttpResponse *shttp_json_response(shttpStatusCode status, cJSON *json) {
 
 }
+#endif /* SHTTP_CJSON */
 
 shttpResponse *shttp_html_response(shttpStatusCode status, char *html) {
 
