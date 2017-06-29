@@ -14,8 +14,6 @@
 ifndef PDIR
 UP_EXTRACT_DIR = ..
 GEN_LIBS = liblibrary.a
-COMPONENTS_liblibrary = ed25519/libed25519.a
-
 endif
 
 
