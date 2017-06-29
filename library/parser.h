@@ -5,6 +5,8 @@
 // to parts of this data to conserve memory.
 // do not free data until request can be completely discarded!
 
-void parse_introduction(char *data, char **path, shttpMethod *method, shttpParameter **parameters, uint8_t *numParameters);
-shttpHeader *parse_header(char *data);
+typedef struct _shttpParserState shttpParserState;
 
+shttpParserState *parser_init_state(void);
+bool parse(shttpParserState *state, char *buffer, uint16_t len);
+void destroy_parser(shttpParserState *state);
