@@ -1,6 +1,31 @@
 #ifndef shttp_http_h_included
 #define shttp_http_h_included
 
+//
+// You may override the following parameters to customize memory usage
+//
+
+// enable CJSON support
+#ifndef SHTTP_CJSON
+#define SHTTP_CJSON 1
+#endif
+
+//
+// Includes
+//
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#if SHTTP_CJSON
+#include <stdlib.h>
+#include <cJSON.h>
+#endif
+
+//
+// Public API
+//
+
 // simple key/value struct, re-used for headers and parameters
 typedef struct _shttpKeyValue {
     char *name;
@@ -163,9 +188,6 @@ shttpResponse *shttp_empty_response(shttpStatusCode status);
 #define NOT_ALLOWED shttp_empty_response(shttpStatusNotAllowed)
 #define UNAUTHORIZED shttp_empty_response(shttpStatusUnauthorized)
 
-// return a json response with correct headers set
-shttpResponse *shttp_json_response(shttpStatusCode status, cJSON *json);
-
 // return a html response with correct headers set, NULL terminated
 shttpResponse *shttp_html_response(shttpStatusCode status, char *html);
 
@@ -179,5 +201,10 @@ shttpResponse *shttp_download_response(shttpStatusCode status, uint32_t len, cha
 // return a download with the callback interface to conserve memory
 // if len is set to 0 the connection will be terminated after finishing
 shttpResponse *shttp_download_callback_response(shttpStatusCode status, uint32_t len, shttpBodyCallback callback, void *userData, shttpCleanupCallback cleanup);
+
+#if SHTTP_CJSON
+// return a json response with correct headers set
+shttpResponse *shttp_json_response(shttpStatusCode status, cJSON *json);
+#endif
 
 #endif /* shttp_http_h_included */
