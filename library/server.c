@@ -12,18 +12,183 @@
 
 #include <time.h>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
+
+#include "debug.h"
 #include "simplehttp/http.h"
 
 #include "parser.h"
 #include "router.h"
 
-typedef struct _connection {
-    // data chunks we have to free when closing this connection
-    uint8_t numChunks;
-    char *chunks;
+static int listeningSocket;
+static xQueueHandle connectionQueue;
+static xTaskHandle dataTask;
+static shttpConfig *shttpServerConfig;
 
-} connection;
+static bool bind_and_listen(const char *port) {
+    struct addrinfo hints;
+
+    // settings
+    memset( &hints, 0, sizeof( hints ) );
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    // fetch hints and addr_list
+    struct addrinfo *addrList;
+    if (getaddrinfo("::", port, &hints, &addrList ) != 0) {
+        LOG(ERROR, "shttp: getaddrinfo failed!")
+        return false;
+    }
+
+    // Try the sockaddrs until a binding succeeds
+    for (struct addrinfo *cur = addrList; cur != NULL; cur = cur->ai_next) {
+        listeningSocket = socket(
+            cur->ai_family,
+            cur->ai_socktype,
+            cur->ai_protocol
+        );
+        if (listeningSocket < 0){
+            continue;
+        }
+
+		// SO_REUSEADDR option is disabled by default in lwip
+#if SO_REUSE
+        const char n = 1;
+        if (setsockopt(listeningSocket, SOL_SOCKET, SO_REUSEADDR, &n, sizeof(n)) != 0) {
+            close(listeningSocket);
+            LOG(ERROR, "shttp: Setting SO_REUSEADDR option failed!")
+            continue;
+        }
+#endif
+
+        // now bind to any interface (there's only one)
+		struct sockaddr_in *serv_addr = NULL;
+		serv_addr = (struct sockaddr_in *)cur->ai_addr;		
+		serv_addr->sin_addr.s_addr = htonl(INADDR_ANY);
+        if(bind(listeningSocket, (struct sockaddr *)serv_addr, cur->ai_addrlen) != 0 ) {
+            close(listeningSocket);
+            LOG(ERROR, "shttp: Could not bind to interface!");
+            continue;
+        }
+
+        // start listening
+        if (listen(listeningSocket, SHTTP_MAX_QUEUED_CONNECTIONS) != 0){
+            close(listeningSocket);
+            LOG(ERROR, "shttp: Listening failed!");
+            continue;
+        }
+
+        // we are listening, stop iterating
+        freeaddrinfo(addrList);
+        return true;
+    }
+
+    // if we get here we exhausted the address list
+    freeaddrinfo(addrList);
+    return false;
+}
+
+void readTask(void *user_data) {
+    int socket;
+    char *recv_buffer;
+    int result;
+    shttpParserState *parser;
+
+    while(1) {
+        // fetch a connection from the queue
+        xQueueReceive(connectionQueue, &socket, portMAX_DELAY);
+
+        // allocate receive buffer
+        recv_buffer = malloc(SHTTP_MAX_RECV_BUFFER);
+        if (recv_buffer == NULL) {
+            LOG(ERROR, "shttp: Out of memory, terminating connection");
+            close(socket);
+            continue;
+        }
+
+        // create a parser
+        parser = parser_init_state();
+
+        // receive data
+        while(1) {
+            result = recv(socket, recv_buffer, SHTTP_MAX_RECV_BUFFER, 0);
+            if (result <= 0) {
+                if ((errno == EPIPE) || (errno == ECONNRESET) || (result == 0)) {
+                    // client disconnected
+                    close(socket);
+                    break;
+                }
+                
+                if (errno == EINTR) {
+                    // interrupted, try again
+                    continue;
+                }
+            } else {
+                // received some bytes, run parser on it
+                if (!parse(parser, recv_buffer, result)) {
+                    // parser thinks we should close the connection
+                    break;
+                }
+            }
+        }
+
+        // clean up
+        destroy_parser(parser);
+        close(socket);
+    }
+}
 
 void shttp_listen(shttpConfig *config) {
+    struct sockaddr_in clientAddr;
+    socklen_t addrLen;
+    int incomingSocket;
 
+    // bind and listen
+    bool result = bind_and_listen(config->port);
+    if (result == false){
+        LOG(ERROR, "shttp: Giving up");
+        return;
+    }
+
+    // Create data processing queue
+    connectionQueue = xQueueCreate(SHTTP_MAX_QUEUED_CONNECTIONS, sizeof(int));
+    if (connectionQueue == NULL) {
+        LOG(ERROR, "shttp: Could not create connection queue, terminating");
+        close(listeningSocket);
+        return;
+    }
+
+    // start data processing task
+    if (xTaskCreate(readTask, "shttp.read", SHTTP_STACK_SIZE, NULL, SHTTP_PRIO, &dataTask) != pdPASS) {
+        LOG(ERROR, "shttp: Could not create data processing task, terminating");
+        vQueueDelete(connectionQueue);
+        close(listeningSocket);
+        return;
+    }
+
+    shttpServerConfig = config;
+
+    // accept connections
+    while(1) {
+        addrLen = sizeof(clientAddr);
+
+        // this blocks until a client connects
+        incomingSocket = accept(listeningSocket, (struct sockaddr *) &clientAddr, &addrLen);
+        if (incomingSocket < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            LOG(ERROR, "shttp: Could not accept connection, terminating");
+            vTaskDelete(dataTask);
+            vQueueDelete(connectionQueue);
+            close(listeningSocket);
+            return;
+        }
+
+        LOG(TRACE, "shttp: Client connected, signaling communications thread");
+        xQueueSendToBack(connectionQueue, &incomingSocket, portMAX_DELAY);
+    }
 }

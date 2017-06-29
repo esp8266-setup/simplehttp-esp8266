@@ -5,6 +5,34 @@
 // You may override the following parameters to customize memory usage
 //
 
+// Data processing task stack size
+#ifndef SHTTP_STACK_SIZE
+#define SHTTP_STACK_SIZE 1000
+#endif
+
+// Data processing task priority
+#ifndef SHTTP_PRIO
+#define SHTTP_PRIO 3
+#endif
+
+// Max HTTP recv buffer
+#ifndef SHTTP_MAX_RECV_BUFFER
+#define SHTTP_MAX_RECV_BUFFER 1500 /* default max MTU */
+#endif
+
+// Max HTTP body size
+#ifndef SHTTP_MAX_BODY_SIZE
+#define SHTTP_MAX_BODY_SIZE 4096
+#endif
+
+// simplehttp can accept multiple connections at once but only
+// processes them in incoming order, one at a time. This defined
+// how many connections may be queued before just dropping the
+// connection
+#ifndef SHTTP_MAX_QUEUED_CONNECTIONS
+#define SHTTP_MAX_QUEUED_CONNECTIONS 10
+#endif
+
 // enable CJSON support
 #ifndef SHTTP_CJSON
 #define SHTTP_CJSON 1
@@ -155,8 +183,8 @@ typedef struct _shttpConfig {
     // set to NULL to listen to everything
     char *hostName; 
 
-    // Port to listen to. You can probably use anything here
-    uint16_t port;
+    // Port to listen to. You can probably use stuff like 'http' here too
+    char *port;
 
     // set to 1 if a slash at the end of the url should be ignored
     // If true it essentially means the following is equivalent:
