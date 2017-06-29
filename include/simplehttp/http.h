@@ -112,12 +112,12 @@ typedef struct _shttpResponse {
     void *callbackUserData;
 
     // body callback
-    shttpBodyCallback bodyCallback;
+    shttpBodyCallback *bodyCallback;
 
     // cleanup callback
     // is called whenever the response is finished (either erroring out
     // or finishing successfully) to clean up the user data pointer
-    shttpCleanupCallback cleanupCallback;
+    shttpCleanupCallback *cleanupCallback;
 } shttpResponse;
 
 
