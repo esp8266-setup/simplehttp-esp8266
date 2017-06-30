@@ -10,6 +10,7 @@
 
 #include "debug.h"
 #include "router.h"
+#include "urlcoder.h"
 
 #ifndef MIN
 #define MIN(a,b) \
@@ -113,19 +114,13 @@ static bool parse_introduction(shttpParserState *state) {
                 
                 uint8_t tmpLen;
                 
-                // FIXME: URL decode these
-
                 // copy key
                 tmpLen = (valueStart - 2) - keyStart;
-                char *name = malloc(tmpLen + 1);
-                memcpy(name, data + keyStart, tmpLen);
-                name[tmpLen - 1] = '\0';
+                char *name = shttp_url_decode_buffer(data + keyStart, tmpLen);
 
                 // copy value
                 tmpLen = (i - 1) - valueStart;
-                char *value = malloc(tmpLen + 1);
-                memcpy(value, data + valueStart, tmpLen);
-                value[tmpLen - 1] = '\0';
+                char *value = shttp_url_decode_buffer(data + valueStart, tmpLen);
 
                 // now append the new parameter
                 state->request.parameters[state->request.numParameters] = (shttpParameter){ name, value };
