@@ -25,7 +25,8 @@
 static int listeningSocket;
 static xQueueHandle connectionQueue;
 static xTaskHandle dataTask;
-static shttpConfig *shttpServerConfig;
+
+volatile shttpConfig *shttpServerConfig;
 
 static bool bind_and_listen(const char *port) {
     struct addrinfo hints;
