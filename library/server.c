@@ -110,7 +110,7 @@ void readTask(void *user_data) {
         }
 
         // create a parser
-        parser = parser_init_state();
+        parser = shttp_parser_init_state();
 
         // receive data
         while(1) {
@@ -128,7 +128,7 @@ void readTask(void *user_data) {
                 }
             } else {
                 // received some bytes, run parser on it
-                if (!parse(parser, recv_buffer, result)) {
+                if (!shttp_parse(parser, recv_buffer, result, socket)) {
                     // parser thinks we should close the connection
                     break;
                 }
@@ -136,7 +136,7 @@ void readTask(void *user_data) {
         }
 
         // clean up
-        destroy_parser(parser);
+        shttp_destroy_parser(parser);
         close(socket);
     }
 }

@@ -2,10 +2,15 @@
 
 extern shttpConfig *shttpServerConfig;
 
-static shttpRoute *find_route(char *path, shttpRequest *request) {
+static shttpRoute *shttp_find_route(char *path, shttpRequest *request) {
 
 }
 
-void exec_route(char *path, shttpRequest *request) {
-    
+void shttp_exec_route(char *path, shttpRequest *request, int socket) {
+
+//
+// API
+//
+
+shttpRoute *shttp_route(shttpMethod method, char *path, shttpRouteCallback *callback) {
 }

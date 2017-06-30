@@ -34,7 +34,7 @@ typedef struct _shttpParserState {
     uint8_t allocatedParameters;
 } shttpParserState;
 
-static bool parse_introduction(shttpParserState *state) {
+static bool shttp_parse_introduction(shttpParserState *state) {
     char *data = state->request.bodyData;
     uint16_t len = state->request.bodyLen;
     uint16_t i; // parser index
@@ -154,7 +154,7 @@ static bool parse_introduction(shttpParserState *state) {
     return true;
 }
 
-static bool parse_headers(shttpParserState *state) {
+static bool shttp_parse_headers(shttpParserState *state) {
     char *data = state->request.bodyData;
     uint16_t len = state->request.bodyLen;
     uint16_t i; // parser index
@@ -254,7 +254,7 @@ static bool parse_headers(shttpParserState *state) {
 // API
 //
 
-shttpParserState *parser_init_state(void) {
+shttpParserState *shttp_parser_init_state(void) {
     shttpParserState *result = malloc(sizeof(shttpParserState));
     result->introductionFinished = false;
     result->headerFinished = false;
@@ -274,7 +274,7 @@ shttpParserState *parser_init_state(void) {
     return result;
 }
 
-bool parse(shttpParserState *state, char *buffer, uint16_t len) {
+bool shttp_parse(shttpParserState *state, char *buffer, uint16_t len, int socket) {
     bool result = true;
 
     if (state->request.bodyData) {
@@ -305,10 +305,10 @@ bool parse(shttpParserState *state, char *buffer, uint16_t len) {
 
                 // line break found, try to parse the stuff
                 if (!state->introductionFinished) {
-                    result = parse_introduction(state);
+                    result = shttp_parse_introduction(state);
                 }
                 if (!state->headerFinished) {
-                    result = parse_headers(state);
+                    result = shttp_parse_headers(state);
                 }
                 break;
             }
@@ -324,7 +324,7 @@ bool parse(shttpParserState *state, char *buffer, uint16_t len) {
     if (state->headerFinished) {
         if (state->request.bodyLen >= state->expectedBodySize) {
             // yeah we have everything, execute the route
-            exec_route(state->path, &state->request);
+            shttp_exec_route(state->path, &state->request, socket);
 
             // we operate in 'Connection: close' mode always
             return false;
@@ -335,7 +335,7 @@ bool parse(shttpParserState *state, char *buffer, uint16_t len) {
     return true;
 }
 
-void destroy_parser(shttpParserState *state) {
+void shttp_destroy_parser(shttpParserState *state) {
     // free headers
     if (state->request.headers != NULL) {
         for(uint8_t i = 0; i < state->request.numHeaders; i++) {

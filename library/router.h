@@ -1,3 +1,8 @@
+#ifndef shttp_router_h_included
+#define shttp_router_h_included
+
 #include "simplehttp/http.h"
 
-void exec_route(char *path, shttpRequest *request);
+void shttp_exec_route(char *path, shttpRequest *request, int socket);
+
+#endif /* shttp_router_h_included */
