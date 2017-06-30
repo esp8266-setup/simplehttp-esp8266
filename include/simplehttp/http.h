@@ -44,6 +44,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 #if SHTTP_CJSON
 #include <stdlib.h>
@@ -73,10 +74,15 @@ typedef struct _shttpRequest {
     // number of headers
     uint8_t numHeaders;
 
-    // URL parameters
+    // URL parameters (those after a ?)
     shttpParameter *parameters;
     // number of parameters
     uint8_t numParameters;
+
+    // URL path parameters (those in an URL path)
+    char **pathParameters;
+    // number of parameters
+    uint8_t numPathParameters;
 
     // request body
     char *bodyData;
@@ -114,7 +120,7 @@ typedef enum _shttpStatusCode {
 // - output parameter (length of the chunk returned)
 // - user data pointer from above
 // returns char pointer with new data or NULL to finish the request (closes the connection)
-typedef char *(*shttpBodyCallback)(uint32_t sentBytes, uint32_t *len, void *userData);
+typedef char *(shttpBodyCallback)(uint32_t sentBytes, uint32_t *len, void *userData);
 
 // cleanup callback, called to clean up user data pointer
 typedef void *(shttpCleanupCallback)(void *userData);
@@ -126,7 +132,7 @@ typedef struct _shttpResponse {
 
     // Headers to set, close up with NULL sentinel
     // Content-Length is calculated automatically
-    shttpHeader *headers;
+    shttpHeader **headers;
 
     // the body to return, set to NULL to define callback
     char *body;
@@ -160,6 +166,8 @@ typedef enum _shttpMethod {
     shttpMethodHEAD    = (1 << 6),
 } shttpMethod;
 
+typedef shttpResponse *(shttpRouteCallback)(shttpRequest *request);
+
 typedef struct _shttpRoute {
     // allowed methods for this route, add them together to allow
     // multiple methods (flags)
@@ -171,7 +179,7 @@ typedef struct _shttpRoute {
     char *path;
 
     // callback to call when route found
-    shttpResponse *(*callback)(shttpRequest *request);
+    shttpRouteCallback *callback;
 
     // if you define multiple routes with the same path and different
     // allowedMethods then the list is processed until a matching
@@ -196,7 +204,7 @@ typedef struct _shttpConfig {
     // be aware that comparing the list is done sequentially, if no
     // match could be found the next item is tried until we reach the
     // end of the list and the server returns a 404
-    shttpRoute *routes;
+    shttpRoute **routes;
 } shttpConfig;
 
 // Start the shttp server, this function does not return
@@ -213,7 +221,18 @@ char *shttp_url_decode(char *value);
 // convenience functions
 //
 
+shttpRoute *shttp_route(shttpMethod method, char *path, shttpRouteCallback *callback);
+
+#define GET(_path, _callback) shttp_route(shttpMethodGET, (_path), (_callback))
+#define POST(_path, _callback) shttp_route(shttpMethodPOST, (_path), (_callback))
+#define PUT(_path, _callback) shttp_route(shttpMethodPUT, (_path), (_callback))
+#define PATCH(_path, _callback) shttp_route(shttpMethodPATCH, (_path), (_callback))
+#define DELETE(_path, _callback) shttp_route(shttpMethodDELETE, (_path), (_callback))
+#define OPTIONS(_path, _callback) shttp_route(shttpMethodOPTIONS, (_path), (_callback))
+#define HEAD(_path, _callback) shttp_route(shttpMethodHEAD, (_path), (_callback) })
+
 shttpResponse *shttp_empty_response(shttpStatusCode status);
+
 #define BAD_REQUEST shttp_empty_response(shttpStatusBadRequest)
 #define NOT_FOUND shttp_empty_response(shttpStatusNotFound)
 #define NOT_IMPLEMENTED shttp_empty_response(shttpStatusNotImplemented)
@@ -228,15 +247,21 @@ shttpResponse *shttp_text_response(shttpStatusCode status, char *text);
 
 // return a download with correct headers set and a specific length
 // set len to 0 to indicate a NULL terminated string and calculate automatically
-shttpResponse *shttp_download_response(shttpStatusCode status, uint32_t len, char *buffer);
+shttpResponse *shttp_download_response(shttpStatusCode status, char *buffer, uint32_t len, char *filename);
 
 // return a download with the callback interface to conserve memory
 // if len is set to 0 the connection will be terminated after finishing
-shttpResponse *shttp_download_callback_response(shttpStatusCode status, uint32_t len, shttpBodyCallback callback, void *userData, shttpCleanupCallback cleanup);
+shttpResponse *shttp_download_callback_response(shttpStatusCode status, uint32_t len, char *filename, shttpBodyCallback *callback, void *userData, shttpCleanupCallback *cleanup);
 
 #if SHTTP_CJSON
 // return a json response with correct headers set
 shttpResponse *shttp_json_response(shttpStatusCode status, cJSON *json);
 #endif
+
+// add headers to `response`, allocates any memory needed, copies the input
+// - add as many headers you like
+// - order is name, value
+// - end the list with NULL
+void shttp_response_add_headers(shttpResponse *response, ...);
 
 #endif /* shttp_http_h_included */

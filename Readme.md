@@ -9,19 +9,20 @@ See the header file `include/simplehttp/http.h` for documentation.
 ## Example code
 
 ```c
+#include <simplehttp/http.h>
 #define BUFF_SZ 200
 
 // greet user by name, name is the last part of the request URL
 static shttpResponse *helloName(shttpRequest *request) {
     // check if we have a parameter, this should be made sure by the lib,
     // but better safe than sorry
-    if (request->numParameters == 1) {
+    if (request->numPathParameters == 1) {
 
         // create greeting message
         char responseBuffer[BUFF_SZ];
         int len = snprintf(
             responseBuffer, BUFF_SZ,
-            "Hello %s!", request->parameters[0]
+            "Hello %s!", request->pathParameters[0]
         );
 
         // return plain text response
@@ -51,22 +52,25 @@ void main(void) {
     config.hostname = "esp8266";
 
     // the port to use, default should be 80
-    config.port = 80;
+    config.port = "80";
 
     // we don't care if the url ends with a slash
     config.appendSlashes = 1;
 
     // now define three routes
-    config.routes = {
+    config.routes = (shttpRoute *){
         // first route has a parameter
-        { shttpMethodGET, "/hello/?", helloName },
+        GET("/hello/?", helloName),
 
         // second route is essentially the same as the first but will
         // only be called if there is no parameter
-        { shttpMethodGET, "/hello", helloUnknown },
+        GET("/hello", helloUnknown),
 
         // this route is a catchall and just returns 404
-        { shttpMethodGET, "*", custom404 }
+        GET("*", custom404),
+
+        // we're finished, do not forget the sentinel
+        NULL
     };
 
     // start the server, this never returns

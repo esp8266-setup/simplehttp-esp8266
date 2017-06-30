@@ -13,7 +13,7 @@
 #
 ifndef PDIR
 UP_EXTRACT_DIR = ..
-GEN_LIBS = liblibrary.a
+GEN_LIBS = libsimplehttp.a
 endif
 
 
