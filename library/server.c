@@ -39,7 +39,7 @@ static bool bind_and_listen(const char *port) {
 
     // fetch hints and addr_list
     struct addrinfo *addrList;
-    if (getaddrinfo("::", port, &hints, &addrList ) != 0) {
+    if (getaddrinfo("0.0.0.0", port, &hints, &addrList ) != 0) {
         LOG(ERROR, "shttp: getaddrinfo failed!")
         return false;
     }
