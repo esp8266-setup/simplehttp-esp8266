@@ -263,10 +263,13 @@ shttpParserState *shttp_parser_init_state(void) {
     result->request.numHeaders = 0;
     result->allocatedHeaders = 5;
     result->request.headers = malloc(5 * sizeof(shttpHeader));
-
+    
     result->request.numParameters = 0;
     result->allocatedParameters = 0;
     result->request.parameters = NULL;
+
+    result->request.numPathParameters = 0;
+    result->request.pathParameters = NULL;
 
     result->request.bodyData = NULL;
     result->request.bodyLen = 0;
@@ -352,6 +355,14 @@ void shttp_destroy_parser(shttpParserState *state) {
             free(state->request.parameters[i].value);
         }
         free(state->request.parameters);
+    }
+
+    // free path parameters
+    if (state->request.pathParameters != NULL) {
+        for(uint8_t i = 0; i < state->request.numPathParameters; i++) {
+            free(state->request.pathParameters[i]);
+        }
+        free(state->request.pathParameters);
     }
 
     // free internal buffer
