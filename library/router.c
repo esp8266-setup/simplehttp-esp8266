@@ -42,7 +42,7 @@ static shttpRoute *shttp_find_route(char *path, shttpRequest *request) {
                 // found parameter, skip path to next slash or end
                 for(uint8_t i = 0; i < pathLen - pathIndex; i++) {
                     if ((path[pathIndex + i] == '/') || (path[pathIndex + i] == ' ') || (i == pathLen - pathIndex - 1)) {
-                        LOG(TRACE, "shttp: parameter length in path: %d", i);
+                        LOG(TRACE, "shttp: parameter length in path: %d", i + 1);
                         pathIndex += i;
                         break;
                     }
