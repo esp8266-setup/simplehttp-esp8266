@@ -139,6 +139,7 @@ void readTask(void *userData) {
         }
 
         // clean up
+        free(recv_buffer);
         shttp_destroy_parser(parser);
         close(socket);
         LOG(DEBUG, "shttp: connection closed");
