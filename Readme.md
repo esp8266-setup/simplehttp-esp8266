@@ -58,7 +58,7 @@ void main(void) {
     config.appendSlashes = 1;
 
     // now define three routes
-    config.routes = (shttpRoute *){
+    config.routes = (shttpRoute *[]){
         // first route has a parameter
         GET("/hello/?", helloName),
 
