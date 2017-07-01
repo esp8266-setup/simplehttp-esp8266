@@ -294,7 +294,9 @@ bool shttp_parse(shttpParserState *state, char *buffer, uint16_t len, int socket
     if (state->request.bodyData) {
         // realloc internalized buffer to contain buffer
         if (state->request.bodyLen + len > SHTTP_MAX_BODY_SIZE) {
-
+            LOG(ERROR, "shttp: HTTP request too long");
+            shttp_write_response(shttp_empty_response(shttpStatusBadRequest), socket);
+            return false;
         }
         state->request.bodyData = realloc(state->request.bodyData, state->request.bodyLen + len);
     } else {
