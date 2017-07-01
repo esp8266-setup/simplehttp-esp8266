@@ -119,6 +119,7 @@ void readTask(void *userData) {
             if (result <= 0) {
                 if ((errno == EPIPE) || (errno == ECONNRESET) || (result == 0)) {
                     // client disconnected
+                    LOG(DEBUG, "shttp: client disconnected");
                     close(socket);
                     break;
                 }
@@ -131,6 +132,7 @@ void readTask(void *userData) {
                 // received some bytes, run parser on it
                 if (!shttp_parse(parser, recv_buffer, result, socket)) {
                     // parser thinks we should close the connection
+                    LOG(DEBUG, "shttp: parse called for quit");
                     break;
                 }
             }
@@ -139,6 +141,7 @@ void readTask(void *userData) {
         // clean up
         shttp_destroy_parser(parser);
         close(socket);
+        LOG(DEBUG, "shttp: connection closed");
     }
 }
 
@@ -171,6 +174,7 @@ void shttp_listen(shttpConfig *config) {
     }
 
     shttpServerConfig = config;
+    LOG(DEBUG, "shttp: server ready to accept connections");
 
     // accept connections
     while(1) {

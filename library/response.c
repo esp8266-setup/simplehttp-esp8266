@@ -10,6 +10,8 @@
 #include <netdb.h>
 #include <errno.h>
 
+#include "debug.h"
+
 void shttp_write_response(shttpResponse *response, int socket) {
     char *responseIntro = NULL;
     switch(response->responseCode) {
@@ -72,21 +74,28 @@ void shttp_write_response(shttpResponse *response, int socket) {
             break;
     }
 
+    LOG(TRACE, "shttp: sending response '%s'", responseIntro);
+
     // send status line
     send(socket, "HTTP/1.1 ", 9, 0);
     send(socket, responseIntro, strlen(responseIntro), 0);
     send(socket, "\r\n", 2, 0);
 
     // if there are any headers send them first
-    if (response->headers) {
-        shttpHeader *header = *response->headers;
-        while(header != NULL) {
+    if (response->headerCount > 0) {
+        for(uint8_t i = 0; i < response->headerCount; i++) {
+            shttpHeader *header = &(response->headers[i]);
+            LOG(TRACE, "shttp: sending header '%s: %s' (%d and %d bytes)", header->name, header->value, strlen(header->name), strlen(header->value));
+
             send(socket, header->name, strlen(header->name), 0);
             send(socket, ": ", 2, 0);
             send(socket, header->value, strlen(header->value), 0);
             send(socket, "\r\n", 2, 0);
-            header++;
+
+            free(header->name);
+            free(header->value);
         }
+        free(response->headers);
     }
     // Send a connection close header as we close the connection anyway
     send(socket, "Connection: close\r\n", 19, 0);
@@ -94,6 +103,7 @@ void shttp_write_response(shttpResponse *response, int socket) {
     // if we know the body length add a content-length header
     uint32_t contentLength = 0;
     if (response->body) {
+        LOG(TRACE, "shttp: body len value %d", response->bodyLen);
         contentLength = (response->bodyLen > 0) ? response->bodyLen : strlen(response->body);
     }
     if (response->bodyCallback) {
@@ -106,25 +116,33 @@ void shttp_write_response(shttpResponse *response, int socket) {
         free(tmp);
     }
 
+    LOG(TRACE, "shttp: content length: %d", contentLength);
+
     // finish header block
     send(socket, "\r\n", 2, 0);
 
     // send body
     if (response->body) {
         // body data available, direct send
+        LOG(TRACE, "shttp: sending body data (%s)", response->body);
         send(socket, response->body, contentLength, 0);
+        free(response->body);
     }
     if (response->bodyCallback) {
         // callback option, repeatedly call callback and stream out data
+        LOG(TRACE, "shttp: sending streaming body data");
+
         uint32_t position = 0;
         uint32_t chunkLen = 0;
         while (1) {
             char *chunk = response->bodyCallback(position, &chunkLen, response->callbackUserData);
             if (!chunk) {
                 // if chunk is NULL, callback is finished, clean up
+                LOG(TRACE, "shttp: body chunk stream finished");
                 response->cleanupCallback(response->callbackUserData);
                 break;
             }
+            LOG(TRACE, "shttp: body chunk %d bytes @ %d", chunkLen, position);
 
             // send the chunk and free the memory
             bool fault = false;
@@ -157,61 +175,60 @@ void shttp_write_response(shttpResponse *response, int socket) {
 
 void shttp_response_add_headers(shttpResponse *response, ...) {
     char *name, *value;
-    uint8_t headerCount;
+    char *cName[10], *cValue[10];
+    uint8_t headerCount = 0;
     va_list ap;
 
     // count number of headers
     va_start(ap, response);
     name = va_arg(ap, char *);
-    while(*name) {
+    while(name) {
         value = va_arg(ap, char *);
         if (value == NULL) {
             va_end(ap);
             return; // count not divisible by 2? bail out!
         }
 
+        // copy header name and value into struct
+        uint16_t len = strlen(name);
+        cName[headerCount] = malloc(len + 1);
+        memcpy(cName[headerCount], name, len);
+        cName[headerCount][len] = '\0';
+
+        len = strlen(value);
+        cValue[headerCount] = malloc(len + 1);
+        memcpy(cValue[headerCount], value, len);
+        cValue[headerCount][len] = '\0';
+
+        LOG(TRACE, "shttp: adding header '%s: %s'", name, value);
+
         // next
         headerCount++;
+        if (headerCount > 9) {
+            LOG(DEBUG, "shttp: too many headers!");
+            break;
+        }
         name = va_arg(ap, char *);
     }
     va_end(ap);
 
     // no headers, nothing to do
     if (headerCount == 0) {
+        LOG(TRACE, "shttp: header count is zero?");
         return;
     }
 
     // allocate memory
-    response->headers = malloc((headerCount + 1) * sizeof(shttpHeader *));
+    
+    response->headers = malloc((headerCount + 1) * sizeof(shttpHeader));
     if (!response->headers) {
         return; // Out of memory
     }
-    response->headers[headerCount] = NULL; // sentinel
-
-    va_start(ap, response);
-    uint8_t i = 0;
-    name = va_arg(ap, char *);
-    while(*name) {
-        value = va_arg(ap, char *);
-        if (value == NULL) {
-            va_end(ap);
-            return;
-        }
-
-        // copy header name and value into struct
-        uint16_t len = strlen(name);
-        response->headers[i]->name = malloc(len);
-        memcpy(response->headers[i]->name, name, len);
-
-        len = strlen(value);
-        response->headers[i]->value = malloc(len);
-        memcpy(response->headers[i]->value, value, len);
-
-        // next
-        i++;
-        name = va_arg(ap, char *);
+    for(uint8_t i = 0; i < headerCount; i++) {
+        response->headers[i].name = cName[i];
+        response->headers[i].value = cValue[i];
     }
-    va_end(ap);
+    response->headerCount = headerCount;
 }
 
 shttpResponse *shttp_empty_response(shttpStatusCode status) {

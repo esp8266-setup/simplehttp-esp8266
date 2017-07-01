@@ -71,19 +71,26 @@ static bool shttp_parse_introduction(shttpParserState *state) {
         return false;
     }
 
+    LOG(TRACE, "shttp: parser -> method: %d", state->method);
+
     // get path until the ? (if there is one)
     bool parameters = false;
 
     state->path = malloc(len - i);
     char *buf = state->path;
     for(; i < len; i++) {
-        if (data[i] != '?') {
+        if ((data[i] != '?') && (data[i] != ' ')) {
             *buf++ = data[i];
         } else {
-            parameters = true;
+            if (data[i] == '?') {
+                parameters = true;
+            }
             break;
         }
     }
+    *buf++ = '\0';
+
+    LOG(TRACE, "shttp: parser -> path: '%s'", state->path);
 
     // read parameters
     if (parameters) {
@@ -121,6 +128,8 @@ static bool shttp_parse_introduction(shttpParserState *state) {
                 // copy value
                 tmpLen = (i - 1) - valueStart;
                 char *value = shttp_url_decode_buffer(data + valueStart, tmpLen);
+
+                LOG(TRACE, "shttp: parser parameter -> '%s': '%s'", name, value);
 
                 // now append the new parameter
                 state->request.parameters[state->request.numParameters] = (shttpParameter){ name, value };
@@ -223,6 +232,8 @@ static bool shttp_parse_headers(shttpParserState *state) {
                 char *value = malloc(tmpLen + 1);
                 memcpy(value, data + valueStart, tmpLen);
                 value[tmpLen - 1] = '\0';
+            
+                LOG(TRACE, "shttp: parser -> header: '%s: %s'", name, value);
 
                 // now append the new parameter
                 state->request.headers[state->request.numHeaders] = (shttpHeader){ name, value };
@@ -327,6 +338,8 @@ bool shttp_parse(shttpParserState *state, char *buffer, uint16_t len, int socket
     if (state->headerFinished) {
         if (state->request.bodyLen >= state->expectedBodySize) {
             // yeah we have everything, execute the route
+            LOG(TRACE, "shttp: parser -> expected body size reached: %d", state->request.bodyLen);
+
             shttp_exec_route(state->path, &state->request, socket);
 
             // we operate in 'Connection: close' mode always
@@ -339,6 +352,8 @@ bool shttp_parse(shttpParserState *state, char *buffer, uint16_t len, int socket
 }
 
 void shttp_destroy_parser(shttpParserState *state) {
+    LOG(TRACE, "shttp: parser -> destroy");
+
     // free headers
     if (state->request.headers != NULL) {
         for(uint8_t i = 0; i < state->request.numHeaders; i++) {

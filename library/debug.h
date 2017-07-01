@@ -2,6 +2,7 @@
 #define debug_h__included
 
 #include <c_types.h>
+#include <stdio.h>
 
 // Debug levels
 #define TRACE 0

@@ -132,9 +132,13 @@ typedef struct _shttpResponse {
 
     // Headers to set, close up with NULL sentinel
     // Content-Length is calculated automatically
-    shttpHeader **headers;
+    shttpHeader *headers;
+    // number of headers in array
+    uint8_t headerCount;
 
-    // the body to return, set to NULL to define callback
+    // the body to return, set to NULL to define callback or no data
+    // Attention: you give this memory away, make sure it is on the
+    // heap! Will be freed automatically after sending to the client.
     char *body;
     // body length,
     // - set to zero to use zero terminated string in body
