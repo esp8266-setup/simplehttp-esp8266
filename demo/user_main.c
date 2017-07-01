@@ -4,7 +4,7 @@
 #include <freertos/task.h>
 
 #include <simplehttp/http.h>
-#define BUFF_SZ 200
+#define BUF_SZ 200
 
 void startup(void *userData);
 
@@ -79,13 +79,16 @@ static shttpResponse *helloName(shttpRequest *request) {
     if (request->numPathParameters == 1) {
 
         // create greeting message
-        char responseBuffer[BUFF_SZ];
+        char *responseBuffer = malloc(BUF_SZ);
         int len = sprintf(
             responseBuffer,
             "Hello %s!",
             request->pathParameters[0]
         );
 
+        printf("Greeting: %s (%d bytes)\n", responseBuffer, len);
+        printf("Param: %s\n", request->pathParameters[0]);
+        
         // return plain text response
         return shttp_text_response(shttpStatusOK, responseBuffer);
     } else {
