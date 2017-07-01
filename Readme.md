@@ -19,7 +19,7 @@ static shttpResponse *helloName(shttpRequest *request) {
     if (request->numPathParameters == 1) {
 
         // create greeting message
-        char responseBuffer[BUFF_SZ];
+        char *responseBuffer = malloc(BUFF_SZ);
         int len = snprintf(
             responseBuffer, BUFF_SZ,
             "Hello %s!", request->pathParameters[0]
