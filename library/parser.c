@@ -11,6 +11,7 @@
 #include "debug.h"
 #include "router.h"
 #include "urlcoder.h"
+#include "response.h"
 
 #ifndef MIN
 #define MIN(a,b) \
