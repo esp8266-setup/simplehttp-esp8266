@@ -244,7 +244,7 @@ shttpResponse *shttp_json_response(shttpStatusCode status, cJSON *json) {
     shttpResponse *response = shttp_empty_response(status);
     shttp_response_add_headers(response, "Content-Type", "application/json", NULL);
     response->body = cJSON_Print(json);
-
+    cJSON_Delete(json);
     return response;
 }
 #endif /* SHTTP_CJSON */
