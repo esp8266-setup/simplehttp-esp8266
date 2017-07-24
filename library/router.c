@@ -9,7 +9,7 @@
 
 extern shttpConfig *shttpServerConfig;
 
-static shttpRoute *shttp_find_route(char *path, shttpRequest *request) {
+static shttpRoute *shttp_find_route(char *path, shttpMethod method, shttpRequest *request) {
     uint8_t pathLen = strlen(path);
 
     LOG(TRACE, "shttp: finding route for '%s' (%d chars)", path, pathLen);
@@ -68,7 +68,10 @@ static shttpRoute *shttp_find_route(char *path, shttpRequest *request) {
         }
 
         if (found) {
-            break;
+            // check if the method matches
+            if ((route->allowedMethods & method) != 0) {
+                break;
+            }
         }
 
         currentRoute++;
@@ -120,9 +123,9 @@ static void shttp_parse_url_parameters(char *path, shttpRoute *route, shttpReque
 
 }
 
-void shttp_exec_route(char *path, shttpRequest *request, int socket) {
+void shttp_exec_route(char *path, shttpMethod method, shttpRequest *request, int socket) {
     // find a route
-    shttpRoute *route = shttp_find_route(path, request);
+    shttpRoute *route = shttp_find_route(path, method, request);
     LOG(TRACE, "shttp: Route %x", route);
 
     // no route found return 404
