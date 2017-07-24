@@ -35,7 +35,7 @@ typedef struct _shttpParserState {
     uint8_t allocatedParameters;
 } shttpParserState;
 
-static bool shttp_parse_introduction(shttpParserState *state) {
+static __attribute__((noinline)) bool shttp_parse_introduction(shttpParserState *state) {
     char *data = state->request.bodyData;
     uint16_t len = state->request.bodyLen;
     uint16_t i; // parser index
@@ -152,8 +152,9 @@ static bool shttp_parse_introduction(shttpParserState *state) {
     // find line break, move data in buffer and shrink buffer
     for(; i < len - 1; i++) {
         if ((data[i] == '\r') && (data[i + 1] == '\n')) {
-            uint16_t newLen = state->request.bodyLen - (i + 1);
-            memmove(state->request.bodyData, state->request.bodyData + i + 1, newLen);
+            uint16_t newLen = state->request.bodyLen - i - 2;
+            LOG(TRACE, "shttp: http request intro consumed %d bytes", state->request.bodyLen - newLen);
+            memmove(state->request.bodyData, state->request.bodyData + i + 2, newLen);
             state->request.bodyData = realloc(state->request.bodyData, newLen);
             state->request.bodyLen = newLen;
             state->introductionFinished = true;
@@ -310,6 +311,7 @@ bool shttp_parse(shttpParserState *state, char *buffer, uint16_t len, int socket
     }
 
     // copy buffer to internal buffer
+    LOG(TRACE, "shttp: received %d bytes, appending to %d in buffer", len, state->request.bodyLen);
     memcpy(state->request.bodyData + state->request.bodyLen, buffer, len);
     state->request.bodyLen += len;
 
