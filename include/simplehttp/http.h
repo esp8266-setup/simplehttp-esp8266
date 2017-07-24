@@ -86,7 +86,7 @@ typedef struct _shttpRequest {
 
     // request body
     char *bodyData;
-    uint8_t bodyLen;
+    uint16_t bodyLen;
 } shttpRequest;
 
 // HTTP status code to make code more readable
