@@ -165,16 +165,18 @@ static __attribute__((noinline)) bool shttp_parse_introduction(shttpParserState 
     return true;
 }
 
-static bool shttp_parse_headers(shttpParserState *state) {
+static __attribute__((noinline)) bool shttp_parse_headers(shttpParserState *state) {
     char *data = state->request.bodyData;
     uint16_t len = state->request.bodyLen;
-    uint16_t i; // parser index
-
     uint16_t keyStart = UINT16_MAX;
     uint16_t valueStart = UINT16_MAX;
 
+    if (len < 5) {
+        return true;
+    }
+
     // split out headers
-    for(; i < len - 1; i++) {
+    for(uint16_t i = 0; i < len - 1; i++) {
         // if we find a ':' and have not already started the value
         // we start the value at the first non-whitespace char after
         // the ':'
@@ -187,15 +189,18 @@ static bool shttp_parse_headers(shttpParserState *state) {
                 }
             }
             continue;
+        } else if ((keyStart == UINT16_MAX) && (data[i] != '\r') && (data[i] != '\n')) {
+            keyStart = i;
         }
 
         // line break so header line is finished
         if ((data[i] == '\r') && (data[i + 1] == '\n')) {
             // no k/v pair in this line -> end of header block, shrink buffer
             if ((keyStart == UINT16_MAX) && (valueStart == UINT16_MAX)) {
-                uint16_t newLen = state->request.bodyLen - (i + 1);
-                memmove(state->request.bodyData, state->request.bodyData + i + 1, newLen);
-                state->request.bodyData = realloc(state->request.bodyData, newLen);
+                uint16_t newLen = state->request.bodyLen - i - 2;
+                memmove(state->request.bodyData, state->request.bodyData + i + 2, newLen);
+                state->request.bodyData = realloc(state->request.bodyData, newLen + 1);
+                state->request.bodyData[newLen] = '\0'; // zero terminate to be sure
                 state->request.bodyLen = newLen;
                 state->headerFinished = true;
                 return true;
@@ -205,57 +210,57 @@ static bool shttp_parse_headers(shttpParserState *state) {
                 return false;
             }
 
-                // at first check if we have to re-alloc the header list
-                if (state->allocatedHeaders < state->request.numHeaders + 1) {
-                    state->request.headers = realloc(state->request.headers, sizeof(shttpHeader) * (state->allocatedHeaders + 1));
-                    if (state->request.headers == NULL) {
-                        state->request.numHeaders = 0;
-                        state->allocatedHeaders = 0;
-                        LOG(ERROR, "shttp: Out of memory while parsing headers");
-                        return false;
-                    }
-
-                    state->allocatedHeaders++;
+            // at first check if we have to re-alloc the header list
+            if (state->allocatedHeaders < state->request.numHeaders + 1) {
+                state->request.headers = realloc(state->request.headers, sizeof(shttpHeader) * (state->allocatedHeaders + 1));
+                if (state->request.headers == NULL) {
+                    state->request.numHeaders = 0;
+                    state->allocatedHeaders = 0;
+                    LOG(ERROR, "shttp: Out of memory while parsing headers");
+                    return false;
                 }
-                
-                uint8_t tmpLen;
-                
-                // copy key
-                tmpLen = (valueStart - 2) - keyStart;
-                char *name = malloc(tmpLen + 1);
-                memcpy(name, data + keyStart, tmpLen);
-                for (uint8_t j = 0; j < tmpLen; j++) {
-                    name[j] = tolower(name[j]);
-                }
-                name[tmpLen - 1] = '\0';
 
-                // copy value
-                tmpLen = (i - 1) - valueStart;
-                char *value = malloc(tmpLen + 1);
-                memcpy(value, data + valueStart, tmpLen);
-                value[tmpLen - 1] = '\0';
+                state->allocatedHeaders++;
+            }
             
-                LOG(TRACE, "shttp: parser -> header: '%s: %s'", name, value);
+            uint8_t tmpLen;
+            
+            // copy key
+            tmpLen = (valueStart - 1) - keyStart;
+            char *name = malloc(tmpLen + 1);
+            memcpy(name, data + keyStart, tmpLen);
+            for (uint8_t j = 0; j < tmpLen; j++) {
+                name[j] = tolower(name[j]);
+            }
+            name[tmpLen - 1] = '\0';
 
-                // now append the new parameter
-                state->request.headers[state->request.numHeaders] = (shttpHeader){ name, value };
+            // copy value
+            tmpLen = (i + 1) - valueStart;
+            char *value = malloc(tmpLen + 1);
+            memcpy(value, data + valueStart, tmpLen);
+            value[tmpLen - 1] = '\0';
+        
+            LOG(TRACE, "shttp: parser -> header: '%s: %s'", name, value);
 
-                // increment the param count
-                state->request.numHeaders++;
+            // now append the new parameter
+            state->request.headers[state->request.numHeaders] = (shttpHeader){ name, value };
 
-                // handle special headers directly
-                if ((strlen(name) == 14) && (strcmp("content-length", name) == 0)) {
-                    state->expectedBodySize = atoi(value);
+            // increment the param count
+            state->request.numHeaders++;
+
+            // handle special headers directly
+            if ((strlen(name) == 14) && (strcmp("content-length", name) == 0)) {
+                state->expectedBodySize = atoi(value);
+            }
+            if ((shttpServerConfig->hostName != NULL) && (strlen(name) == 4) && (strcmp("host", name) == 0)) {
+                if (strcmp(shttpServerConfig->hostName, value) != 0) {
+                    // FIXME: wrong host return a response immediately                        
                 }
-                if ((shttpServerConfig->hostName != NULL) && (strlen(name) == 4) && (strcmp("host", name) == 0)) {
-                    if (strcmp(shttpServerConfig->hostName, value) != 0) {
-                        // FIXME: wrong host return a response immediately                        
-                    }
-                }
+            }
 
-                // reset starting positions
-                keyStart = UINT16_MAX;
-                valueStart = UINT16_MAX;
+            // reset starting positions
+            keyStart = UINT16_MAX;
+            valueStart = UINT16_MAX;
         }
     }
 
@@ -315,40 +320,53 @@ bool shttp_parse(shttpParserState *state, char *buffer, uint16_t len, int socket
     memcpy(state->request.bodyData + state->request.bodyLen, buffer, len);
     state->request.bodyLen += len;
 
-    // check if we are in header or body mode
-    if ((!state->introductionFinished) && (!state->headerFinished)) {
-        // check if we have a \r\n in the buffer
-        char *data = state->request.bodyData;
-        for (uint16_t i = 0; i < state->request.bodyLen - 1; i++) {
-            if ((data[i] == '\r') && (data[i + 1] == '\n')) {
+    while(1) {
+        LOG(TRACE, "shttp: parser loop entered, %d bytes left (intro: %d, headers: %d)", state->request.bodyLen, state->introductionFinished, state->headerFinished);
 
-                // line break found, try to parse the stuff
-                if (!state->introductionFinished) {
-                    result = shttp_parse_introduction(state);
+        // check if we are in header or body mode
+        if ((!state->introductionFinished) && (!state->headerFinished)) {
+            // check if we have a \r\n in the buffer
+            char *data = state->request.bodyData;
+            for (uint16_t i = 0; i < state->request.bodyLen - 1; i++) {
+                if ((data[i] == '\r') && (data[i + 1] == '\n')) {
+
+                    // line break found, try to parse the stuff
+                    if (!state->introductionFinished) {
+                        result = shttp_parse_introduction(state);
+                        break;
+                    }
+                    if (!state->headerFinished) {
+                        result = shttp_parse_headers(state);
+                        break;
+                    }
                 }
-                if (!state->headerFinished) {
-                    result = shttp_parse_headers(state);
-                }
+            }
+            if (!result) {
+                // parse error
+                return false;
+            }
+            continue;
+        }
+
+        // if headers have finished, check if body size reached
+        if (state->headerFinished) {
+            if (state->request.bodyLen >= state->expectedBodySize) {
+                // yeah we have everything, execute the route
+                LOG(TRACE, "shttp: parser -> expected body size reached: %d/%d", state->request.bodyLen, state->expectedBodySize);
+
+                // run the callback
+                shttp_exec_route(state->path, state->method, &state->request, socket);
+
+                // we operate in 'Connection: close' mode always
+                return false;
+            }
+            LOG(TRACE, "shttp: parser -> waiting for more data");
+            break;
+        } else {
+            if (state->request.bodyLen < 5) {
+                LOG(TRACE, "shttp: parser -> waiting for more data, headers not finished");
                 break;
             }
-        }
-    }
-
-    if (!result) {
-        // parse error
-        return false;
-    }
-
-    // if headers have finished, check if body size reached
-    if (state->headerFinished) {
-        if (state->request.bodyLen >= state->expectedBodySize) {
-            // yeah we have everything, execute the route
-            LOG(TRACE, "shttp: parser -> expected body size reached: %d", state->request.bodyLen);
-
-            shttp_exec_route(state->path, &state->request, socket);
-
-            // we operate in 'Connection: close' mode always
-            return false;
         }
     }
 
