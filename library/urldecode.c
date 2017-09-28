@@ -1,8 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <c_types.h>
 
-char *shttp_url_decode_buffer(char *buffer, uint8_t len) {
+ICACHE_FLASH_ATTR char *shttp_url_decode_buffer(char *buffer, uint8_t len) {
     // allocate output buffer and exit if not enough memory
     char *output = malloc(len + 1);
     if (output == NULL) {
@@ -32,7 +33,7 @@ char *shttp_url_decode_buffer(char *buffer, uint8_t len) {
     return realloc(output, j);
 }
 
-char *shttp_url_decode(char *value) {
+ICACHE_FLASH_ATTR char *shttp_url_decode(char *value) {
     // slow but size efficient method reuse
     return shttp_url_decode_buffer(value, strlen(value));
 }

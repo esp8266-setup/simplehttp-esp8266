@@ -8,76 +8,79 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netdb.h>
+
+#if HAVE_ERRNO == 1
 #include <errno.h>
+#endif /* HAVE_ERRNO */
 
 #include "debug.h"
 
-void shttp_write_response(shttpResponse *response, int socket) {
-    char *responseIntro = NULL;
+ICACHE_FLASH_ATTR void shttp_write_response(shttpResponse *response, int socket) {
+    const char *responseIntro = NULL;
     switch(response->responseCode) {
         case shttpStatusOK:
-            responseIntro = "200 Ok";
+            responseIntro = FSTR("200 Ok");
             break;
         case shttpStatusCreated:
-            responseIntro = "201 Created";
+            responseIntro = FSTR("201 Created");
             break;
         case shttpStatusAccepted:
-            responseIntro = "202 Accepted";
+            responseIntro = FSTR("202 Accepted");
             break;
         case shttpStatusNoContent:
-            responseIntro = "204 No content";
+            responseIntro = FSTR("204 No content");
             break;
-    
+
         case shttpStatusMovedPermanently:
-            responseIntro = "301 Redirect";
+            responseIntro = FSTR("301 Redirect");
             break;
         case shttpStatusFound:
-            responseIntro = "302 Found";
+            responseIntro = FSTR("302 Found");
             break;
         case shttpStatusNotModified:
-            responseIntro = "304 Not modified";
+            responseIntro = FSTR("304 Not modified");
             break;
 
         case shttpStatusBadRequest:
-            responseIntro = "400 Bad request";
+            responseIntro = FSTR("400 Bad request");
             break;
         case shttpStatusUnauthorized:
-            responseIntro = "401 Unauthorized";
+            responseIntro = FSTR("401 Unauthorized");
             break;
         case shttpStatusForbidden:
-            responseIntro = "403 Forbidden Ok";
+            responseIntro = FSTR("403 Forbidden");
             break;
         case shttpStatusNotFound:
-            responseIntro = "404 Not found";
+            responseIntro = FSTR("404 Not found");
             break;
         case shttpStatusNotAcceptable:
-            responseIntro = "406 Not acceptable";
+            responseIntro = FSTR("406 Not acceptable");
             break;
         case shttpStatusConflict:
-            responseIntro = "409 Conflict";
+            responseIntro = FSTR("409 Conflict");
             break;
         case shttpStatusRequestURITooLong:
-            responseIntro = "414 Request URI too long";
+            responseIntro = FSTR("414 Request URI too long");
             break;
 
         case shttpStatusInternalError:
-            responseIntro = "500 Internal server error";
+            responseIntro = FSTR("500 Internal server error");
             break;
         case shttpStatusNotImplemented:
-            responseIntro = "501 Not implemented";
+            responseIntro = FSTR("501 Not implemented");
             break;
         case shttpStatusBadGateway:
-            responseIntro = "502 Bad gateway";
+            responseIntro = FSTR("502 Bad gateway");
             break;
         case shttpStatusServiceUnavailable:
-            responseIntro = "503 Service unavailable";
+            responseIntro = FSTR("503 Service unavailable");
             break;
     }
 
     LOG(TRACE, "shttp: sending response '%s'", responseIntro);
 
     // send status line
-    send(socket, "HTTP/1.1 ", 9, 0);
+    send(socket, FSTR("HTTP/1.1 "), 9, 0);
     send(socket, responseIntro, strlen(responseIntro), 0);
     send(socket, "\r\n", 2, 0);
 
@@ -98,7 +101,7 @@ void shttp_write_response(shttpResponse *response, int socket) {
         free(response->headers);
     }
     // Send a connection close header as we close the connection anyway
-    send(socket, "Connection: close\r\n", 19, 0);
+    send(socket, FSTR("Connection: close\r\n"), 19, 0);
 
     // if we know the body length add a content-length header
     uint32_t contentLength = 0;
@@ -111,7 +114,7 @@ void shttp_write_response(shttpResponse *response, int socket) {
     }
     if (contentLength > 0) {
         char *tmp = malloc(18 + 8); // max 99 MB
-        sprintf(tmp, "Content-Length: %d\r\n", contentLength);
+        sprintf(tmp, FSTR("Content-Length: %d\r\n"), contentLength);
         send(socket, tmp, strlen(tmp), 0);
         free(tmp);
     }
@@ -149,9 +152,11 @@ void shttp_write_response(shttpResponse *response, int socket) {
             while (1) {
                 int bytes = send(socket, chunk, chunkLen, 0);
                 if (bytes == 0) {
+#if HAVE_ERRNO == 1
                     if (errno == EINTR) {
                         continue;
                     }
+#endif /* HAVE_ERRNO */
                     fault = true;
                     break;
                 }
@@ -173,7 +178,7 @@ void shttp_write_response(shttpResponse *response, int socket) {
 // API
 //
 
-void shttp_response_add_headers(shttpResponse *response, ...) {
+ICACHE_FLASH_ATTR void shttp_response_add_headers(shttpResponse *response, ...) {
     char *name, *value;
     char *cName[10], *cValue[10];
     uint8_t headerCount = 0;
@@ -231,7 +236,7 @@ void shttp_response_add_headers(shttpResponse *response, ...) {
     response->headerCount = headerCount;
 }
 
-shttpResponse *shttp_empty_response(shttpStatusCode status) {
+ICACHE_FLASH_ATTR shttpResponse *shttp_empty_response(shttpStatusCode status) {
     shttpResponse *response = malloc(sizeof(shttpResponse));
     memset(response, 0, sizeof(shttpResponse));
 
@@ -240,48 +245,48 @@ shttpResponse *shttp_empty_response(shttpStatusCode status) {
 }
 
 #if SHTTP_CJSON
-shttpResponse *shttp_json_response(shttpStatusCode status, cJSON *json) {
+ICACHE_FLASH_ATTR shttpResponse *shttp_json_response(shttpStatusCode status, cJSON *json) {
     shttpResponse *response = shttp_empty_response(status);
-    shttp_response_add_headers(response, "Content-Type", "application/json", NULL);
+    shttp_response_add_headers(response, FSTR("Content-Type"), FSTR("application/json"), NULL);
     response->body = cJSON_Print(json);
     cJSON_Delete(json);
     return response;
 }
 #endif /* SHTTP_CJSON */
 
-shttpResponse *shttp_html_response(shttpStatusCode status, char *html) {
+ICACHE_FLASH_ATTR shttpResponse *shttp_html_response(shttpStatusCode status, char *html) {
     shttpResponse *response = shttp_empty_response(status);
-    shttp_response_add_headers(response, "Content-Type", "text/html", NULL);
+    shttp_response_add_headers(response, FSTR("Content-Type"), FSTR("text/html"), NULL);
     response->body = html;
 
     return response;
 }
 
-shttpResponse *shttp_text_response(shttpStatusCode status, char *text) {
+ICACHE_FLASH_ATTR shttpResponse *shttp_text_response(shttpStatusCode status, char *text) {
     shttpResponse *response = shttp_empty_response(status);
-    shttp_response_add_headers(response, "Content-Type", "text/plain", NULL);
+    shttp_response_add_headers(response, FSTR("Content-Type"), FSTR("text/plain"), NULL);
     response->body = text;
 
     return response;
 }
 
-shttpResponse *shttp_download_response(shttpStatusCode status, char *buffer, uint32_t len, char *filename) {
+ICACHE_FLASH_ATTR shttpResponse *shttp_download_response(shttpStatusCode status, char *buffer, uint32_t len, char *filename) {
     shttpResponse *response = shttp_empty_response(status);
 
     // download means an attachment header
-    char *disposition = "attachment";
+    char *disposition = (char *)FSTR("attachment");
     
     if (filename) {
         // if we have a filename add it to the header
         uint8_t len = 23 + strlen(filename) + 1;
         char *tmp = malloc(len);
-        sprintf(tmp, "attachment; filename=\"%s\"", filename);
+        sprintf(tmp, FSTR("attachment; filename=\"%s\""), filename);
         disposition = tmp;
     }
 
     shttp_response_add_headers(response,
-        "Content-Type", "application/octet-stream",
-        "Content-Disposition", disposition,
+        FSTR("Content-Type"), FSTR("application/octet-stream"),
+        FSTR("Content-Disposition"), disposition,
         NULL);
 
     // response body needs length as it is probably binary
@@ -297,7 +302,7 @@ shttpResponse *shttp_download_response(shttpStatusCode status, char *buffer, uin
 
 }
 
-shttpResponse *shttp_download_callback_response(shttpStatusCode status, uint32_t len, char *filename, shttpBodyCallback *callback, void *userData, shttpCleanupCallback *cleanup) {
+ICACHE_FLASH_ATTR shttpResponse *shttp_download_callback_response(shttpStatusCode status, uint32_t len, char *filename, shttpBodyCallback *callback, void *userData, shttpCleanupCallback *cleanup) {
     shttpResponse *response = shttp_download_response(status, NULL, 0, filename);
     response->bodyCallback = callback;
     response->callbackUserData = userData;

@@ -4,7 +4,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netdb.h>
-#include <errno.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -22,13 +21,17 @@
 #include "parser.h"
 #include "router.h"
 
+#if HAVE_ERRNO == 1
+#include <errno.h>
+#endif /* HAVE_ERRNO */
+
 static int listeningSocket;
 static xQueueHandle connectionQueue;
 static xTaskHandle dataTask;
 
 volatile shttpConfig *shttpServerConfig;
 
-static bool bind_and_listen(const char *port) {
+ICACHE_FLASH_ATTR static bool bind_and_listen(const char *port) {
     struct addrinfo hints;
 
     // settings
@@ -117,8 +120,9 @@ void readTask(void *userData) {
         while(1) {
             result = recv(socket, recv_buffer, SHTTP_MAX_RECV_BUFFER, 0);
             if (result <= 0) {
+#if HAVE_ERRNO == 1
                 if ((errno == EPIPE) || (errno == ECONNRESET) || (result == 0)) {
-                    // client disconnected
+                    client disconnected
                     LOG(DEBUG, "shttp: client disconnected");
                     close(socket);
                     break;
@@ -128,6 +132,12 @@ void readTask(void *userData) {
                     // interrupted, try again
                     continue;
                 }
+#else
+                LOG(DEBUG, "shttp: client disconnected");
+                close(socket);
+                break;
+#endif /* HAVE_ERRNO */
+
             } else {
                 // received some bytes, run parser on it
                 if (!shttp_parse(parser, recv_buffer, result, socket)) {
@@ -146,7 +156,7 @@ void readTask(void *userData) {
     }
 }
 
-void shttp_listen(shttpConfig *config) {
+ICACHE_FLASH_ATTR void shttp_listen(shttpConfig *config) {
     struct sockaddr_in clientAddr;
     socklen_t addrLen;
     int incomingSocket;
@@ -184,9 +194,11 @@ void shttp_listen(shttpConfig *config) {
         // this blocks until a client connects
         incomingSocket = accept(listeningSocket, (struct sockaddr *) &clientAddr, &addrLen);
         if (incomingSocket < 0) {
+#if HAVE_ERRNO == 1
             if (errno == EINTR) {
                 continue;
             }
+#endif /* HAVE_ERRNO */
             LOG(ERROR, "shttp: Could not accept connection, terminating");
             vTaskDelete(dataTask);
             vQueueDelete(connectionQueue);

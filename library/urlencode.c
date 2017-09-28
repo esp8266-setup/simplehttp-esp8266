@@ -1,9 +1,11 @@
+#include "simplehttp/http.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <c_types.h>
 
-char *shttp_url_encode_buffer(char *buffer, uint8_t len) {
+ICACHE_FLASH_ATTR char *shttp_url_encode_buffer(char *buffer, uint8_t len) {
     // allocate output buffer and exit if not enough memory
     uint8_t allocatedLength = len + 12; // reserve enough space for 4 encoded chars
     char *output = malloc(allocatedLength + 1); 
@@ -11,7 +13,7 @@ char *shttp_url_encode_buffer(char *buffer, uint8_t len) {
         return NULL;
     }
 
-    char *reserved = " !\"#$%&'()*+,-./:;<=>?@[\\]{|}";
+    const char *reserved = FSTR(" !\"#$%&'()*+,-./:;<=>?@[\\]{|}");
     uint8_t j = 0;
     for (uint8_t i = 0; i < len; i++) {
         bool found = false;
@@ -48,7 +50,7 @@ char *shttp_url_encode_buffer(char *buffer, uint8_t len) {
     return output;
 }
 
-char *shttp_url_encode(char *value) {
+ICACHE_FLASH_ATTR char *shttp_url_encode(char *value) {
     // slow but size efficient method reuse
     return shttp_url_encode_buffer(value, strlen(value));
 }

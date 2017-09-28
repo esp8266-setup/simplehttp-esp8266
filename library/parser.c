@@ -35,37 +35,37 @@ typedef struct _shttpParserState {
     uint8_t allocatedParameters;
 } shttpParserState;
 
-static __attribute__((noinline)) bool shttp_parse_introduction(shttpParserState *state) {
+static __attribute__((noinline)) ICACHE_FLASH_ATTR bool shttp_parse_introduction(shttpParserState *state) {
     char *data = state->request.bodyData;
     uint16_t len = state->request.bodyLen;
     uint16_t i; // parser index
 
     // find method
-    if (strncmp("GET ", data, MIN(4, len)) == 0) {
+    if (strncmp(FSTR("GET "), data, MIN(4, len)) == 0) {
         state->method = shttpMethodGET;
         i = 4;
     } else
-    if (strncmp("POST ", data, MIN(5, len)) == 0) {
+    if (strncmp(FSTR("POST "), data, MIN(5, len)) == 0) {
         state->method = shttpMethodPOST;
         i = 5;
     } else
-    if (strncmp("PUT ", data, MIN(4, len)) == 0) {
+    if (strncmp(FSTR("PUT "), data, MIN(4, len)) == 0) {
         state->method = shttpMethodPUT;
         i = 4;
     } else
-    if (strncmp("PATCH ", data, MIN(6, len)) == 0) {
+    if (strncmp(FSTR("PATCH "), data, MIN(6, len)) == 0) {
         state->method = shttpMethodPATCH;
         i = 6;
     } else
-    if (strncmp("DELETE ", data, MIN(7, len)) == 0) {
+    if (strncmp(FSTR("DELETE "), data, MIN(7, len)) == 0) {
         state->method = shttpMethodDELETE;
         i = 7;
     } else
-    if (strncmp("OPTIONS ", data, MIN(8, len)) == 0) {
+    if (strncmp(FSTR("OPTIONS "), data, MIN(8, len)) == 0) {
         state->method = shttpMethodOPTIONS;
         i = 8;
     } else
-    if (strncmp("HEAD ", data, MIN(5, len)) == 0) {
+    if (strncmp(FSTR("HEAD "), data, MIN(5, len)) == 0) {
         state->method = shttpMethodHEAD;
         i = 5;
     } else {
@@ -165,7 +165,7 @@ static __attribute__((noinline)) bool shttp_parse_introduction(shttpParserState 
     return true;
 }
 
-static __attribute__((noinline)) bool shttp_parse_headers(shttpParserState *state) {
+static __attribute__((noinline)) ICACHE_FLASH_ATTR bool shttp_parse_headers(shttpParserState *state) {
     char *data = state->request.bodyData;
     uint16_t len = state->request.bodyLen;
     uint16_t keyStart = UINT16_MAX;
@@ -249,10 +249,10 @@ static __attribute__((noinline)) bool shttp_parse_headers(shttpParserState *stat
             state->request.numHeaders++;
 
             // handle special headers directly
-            if ((strlen(name) == 14) && (strcmp("content-length", name) == 0)) {
+            if ((strlen(name) == 14) && (strcmp(FSTR("content-length"), name) == 0)) {
                 state->expectedBodySize = atoi(value);
             }
-            if ((shttpServerConfig->hostName != NULL) && (strlen(name) == 4) && (strcmp("host", name) == 0)) {
+            if ((shttpServerConfig->hostName != NULL) && (strlen(name) == 4) && (strcmp(FSTR("host"), name) == 0)) {
                 if (strcmp(shttpServerConfig->hostName, value) != 0) {
                     // FIXME: wrong host return a response immediately                        
                 }
@@ -272,7 +272,7 @@ static __attribute__((noinline)) bool shttp_parse_headers(shttpParserState *stat
 // API
 //
 
-shttpParserState *shttp_parser_init_state(void) {
+ICACHE_FLASH_ATTR shttpParserState *shttp_parser_init_state(void) {
     shttpParserState *result = malloc(sizeof(shttpParserState));
     result->introductionFinished = false;
     result->headerFinished = false;
@@ -295,7 +295,7 @@ shttpParserState *shttp_parser_init_state(void) {
     return result;
 }
 
-bool shttp_parse(shttpParserState *state, char *buffer, uint16_t len, int socket) {
+ICACHE_FLASH_ATTR bool shttp_parse(shttpParserState *state, char *buffer, uint16_t len, int socket) {
     bool result = true;
 
     if (state->request.bodyData) {
@@ -374,7 +374,7 @@ bool shttp_parse(shttpParserState *state, char *buffer, uint16_t len, int socket
     return true;
 }
 
-void shttp_destroy_parser(shttpParserState *state) {
+ICACHE_FLASH_ATTR void shttp_destroy_parser(shttpParserState *state) {
     LOG(TRACE, "shttp: parser -> destroy");
 
     // free headers

@@ -38,6 +38,11 @@
 #define SHTTP_CJSON 1
 #endif
 
+// have errno?
+#ifndef HAVE_ERRNO
+#define HAVE_ERRNO 0
+#endif
+
 //
 // Includes
 //
@@ -267,5 +272,11 @@ shttpResponse *shttp_json_response(shttpStatusCode status, cJSON *json);
 // - order is name, value
 // - end the list with NULL
 void shttp_response_add_headers(shttpResponse *response, ...);
+
+// Some helper macros
+#define FSTR(_str) ({ \
+    static const char flash_str[] ICACHE_RODATA_ATTR STORE_ATTR = _str; \
+    flash_str; \
+})
 
 #endif /* shttp_http_h_included */

@@ -9,7 +9,7 @@
 
 extern shttpConfig *shttpServerConfig;
 
-static shttpRoute *shttp_find_route(char *path, shttpMethod method, shttpRequest *request) {
+ICACHE_FLASH_ATTR static shttpRoute *shttp_find_route(char *path, shttpMethod method, shttpRequest *request) {
     uint8_t pathLen = strlen(path);
 
     LOG(TRACE, "shttp: finding route for '%s' (%d chars)", path, pathLen);
@@ -81,7 +81,7 @@ static shttpRoute *shttp_find_route(char *path, shttpMethod method, shttpRequest
     return route;
 }
 
-static void shttp_parse_url_parameters(char *path, shttpRoute *route, shttpRequest *request) {    
+ICACHE_FLASH_ATTR static void shttp_parse_url_parameters(char *path, shttpRoute *route, shttpRequest *request) {    
     uint8_t pathLen = strlen(path);
     uint8_t routeLen = strlen(route->path);
     for (uint8_t pathIndex = 0, routeIndex = 0; pathIndex < pathLen; pathIndex++) {
@@ -123,7 +123,7 @@ static void shttp_parse_url_parameters(char *path, shttpRoute *route, shttpReque
 
 }
 
-void shttp_exec_route(char *path, shttpMethod method, shttpRequest *request, int socket) {
+ICACHE_FLASH_ATTR void shttp_exec_route(char *path, shttpMethod method, shttpRequest *request, int socket) {
     // find a route
     shttpRoute *route = shttp_find_route(path, method, request);
     LOG(TRACE, "shttp: Route %x", route);
@@ -146,7 +146,7 @@ void shttp_exec_route(char *path, shttpMethod method, shttpRequest *request, int
 // API
 //
 
-shttpRoute *shttp_route(shttpMethod method, char *path, shttpRouteCallback *callback) {
+ICACHE_FLASH_ATTR shttpRoute *shttp_route(shttpMethod method, char *path, shttpRouteCallback *callback) {
     shttpRoute *route = malloc(sizeof(shttpRoute));
     route->allowedMethods = method;
     route->path = path;
