@@ -56,6 +56,15 @@
 #include <cJSON.h>
 #endif
 
+#include <lwip/opt.h>
+#include <lwip/arch.h>
+#include <lwip/api.h>
+
+#if !LWIP_NETCONN
+#error You need to have LwIP Netconn enabled
+#endif
+
+
 //
 // Public API
 //
@@ -150,6 +159,8 @@ typedef struct _shttpResponse {
     // - if set to zero using the callback, the connection is
     //   terminated when the response finishes
     uint32_t bodyLen;
+    // free body after usage
+    bool free_body;
 
     // user data pointer given to body callback
     void *callbackUserData;
@@ -200,8 +211,8 @@ typedef struct _shttpConfig {
     // set to NULL to listen to everything
     char *hostName; 
 
-    // Port to listen to. You can probably use stuff like 'http' here too
-    char *port;
+    // Port to listen to
+    uint16_t port;
 
     // set to 1 if a slash at the end of the url should be ignored
     // If true it essentially means the following is equivalent:
@@ -249,14 +260,14 @@ shttpResponse *shttp_empty_response(shttpStatusCode status);
 #define UNAUTHORIZED shttp_empty_response(shttpStatusUnauthorized)
 
 // return a html response with correct headers set, NULL terminated
-shttpResponse *shttp_html_response(shttpStatusCode status, char *html);
+shttpResponse *shttp_html_response(shttpStatusCode status, char *html, bool autofree);
 
 // return a text response with correct headers set, NULL terminated
-shttpResponse *shttp_text_response(shttpStatusCode status, char *text);
+shttpResponse *shttp_text_response(shttpStatusCode status, char *text, bool autofree);
 
 // return a download with correct headers set and a specific length
 // set len to 0 to indicate a NULL terminated string and calculate automatically
-shttpResponse *shttp_download_response(shttpStatusCode status, char *buffer, uint32_t len, char *filename);
+shttpResponse *shttp_download_response(shttpStatusCode status, char *buffer, uint32_t len, char *filename, bool autofree);
 
 // return a download with the callback interface to conserve memory
 // if len is set to 0 the connection will be terminated after finishing

@@ -3,6 +3,10 @@
 
 #include "simplehttp/http.h"
 
-void shttp_write_response(shttpResponse *response, int socket);
+#include <lwip/opt.h>
+#include <lwip/arch.h>
+#include <lwip/api.h>
+
+void shttp_write_response(shttpResponse *response, struct netconn *conn);
 
 #endif /* shttp_response_h_included */

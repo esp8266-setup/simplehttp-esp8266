@@ -295,14 +295,14 @@ ICACHE_FLASH_ATTR shttpParserState *shttp_parser_init_state(void) {
     return result;
 }
 
-ICACHE_FLASH_ATTR bool shttp_parse(shttpParserState *state, char *buffer, uint16_t len, int socket) {
+ICACHE_FLASH_ATTR bool shttp_parse(shttpParserState *state, char *buffer, uint16_t len, struct netconn *conn) {
     bool result = true;
 
     if (state->request.bodyData) {
         // realloc internalized buffer to contain buffer
         if (state->request.bodyLen + len > SHTTP_MAX_BODY_SIZE) {
             LOG(ERROR, "shttp: HTTP request too long");
-            shttp_write_response(shttp_empty_response(shttpStatusBadRequest), socket);
+            shttp_write_response(shttp_empty_response(shttpStatusBadRequest), conn);
             return false;
         }
         state->request.bodyData = realloc(state->request.bodyData, state->request.bodyLen + len);
@@ -324,7 +324,9 @@ ICACHE_FLASH_ATTR bool shttp_parse(shttpParserState *state, char *buffer, uint16
         LOG(TRACE, "shttp: parser loop entered, %d bytes left (intro: %d, headers: %d)", state->request.bodyLen, state->introductionFinished, state->headerFinished);
 
         // check if we are in header or body mode
-        if ((!state->introductionFinished) && (!state->headerFinished)) {
+        bool lastStateIntro = state->introductionFinished;
+        bool lastStateHeader = state->headerFinished;
+        if ((!state->introductionFinished) || (!state->headerFinished)) {
             // check if we have a \r\n in the buffer
             char *data = state->request.bodyData;
             for (uint16_t i = 0; i < state->request.bodyLen - 1; i++) {
@@ -345,6 +347,9 @@ ICACHE_FLASH_ATTR bool shttp_parse(shttpParserState *state, char *buffer, uint16
                 // parse error
                 return false;
             }
+            if ((lastStateIntro == state->introductionFinished) && (lastStateHeader == state->headerFinished)) {
+                break;
+            }
             continue;
         }
 
@@ -355,7 +360,7 @@ ICACHE_FLASH_ATTR bool shttp_parse(shttpParserState *state, char *buffer, uint16
                 LOG(TRACE, "shttp: parser -> expected body size reached: %d/%d", state->request.bodyLen, state->expectedBodySize);
 
                 // run the callback
-                shttp_exec_route(state->path, state->method, &state->request, socket);
+                shttp_exec_route(state->path, state->method, &state->request, conn);
 
                 // we operate in 'Connection: close' mode always
                 return false;

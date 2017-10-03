@@ -1,9 +1,7 @@
 #include <string.h>
 
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <unistd.h>
-#include <netdb.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -21,126 +19,53 @@
 #include "parser.h"
 #include "router.h"
 
-#if HAVE_ERRNO == 1
-#include <errno.h>
-#endif /* HAVE_ERRNO */
-
-static int listeningSocket;
+static struct netconn *listeningConn;
 static xQueueHandle connectionQueue;
 static xTaskHandle dataTask;
 
 volatile shttpConfig *shttpServerConfig;
 
-ICACHE_FLASH_ATTR static bool bind_and_listen(const char *port) {
-    struct addrinfo hints;
-
-    // settings
-    memset( &hints, 0, sizeof( hints ) );
-    hints.ai_family   = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
-    // fetch hints and addr_list
-    struct addrinfo *addrList;
-    if (getaddrinfo("0.0.0.0", port, &hints, &addrList ) != 0) {
-        LOG(ERROR, "shttp: getaddrinfo failed!")
+ICACHE_FLASH_ATTR static bool bind_and_listen(uint16_t port) {
+    listeningConn = netconn_new(NETCONN_TCP);
+    if (listeningConn == NULL) {
+        LOG(ERROR, "shttp: creating new netconn failed");
         return false;
     }
 
-    // Try the sockaddrs until a binding succeeds
-    for (struct addrinfo *cur = addrList; cur != NULL; cur = cur->ai_next) {
-        listeningSocket = socket(
-            cur->ai_family,
-            cur->ai_socktype,
-            cur->ai_protocol
-        );
-        if (listeningSocket < 0){
-            continue;
-        }
+    netconn_bind(listeningConn, NULL, port);
+    netconn_listen(listeningConn);
 
-		// SO_REUSEADDR option is disabled by default in lwip
-#if SO_REUSE
-        const char n = 1;
-        if (setsockopt(listeningSocket, SOL_SOCKET, SO_REUSEADDR, &n, sizeof(n)) != 0) {
-            close(listeningSocket);
-            LOG(ERROR, "shttp: Setting SO_REUSEADDR option failed!")
-            continue;
-        }
-#endif
-
-        // now bind to any interface (there's only one)
-		struct sockaddr_in *serv_addr = NULL;
-		serv_addr = (struct sockaddr_in *)cur->ai_addr;		
-		serv_addr->sin_addr.s_addr = htonl(INADDR_ANY);
-        if(bind(listeningSocket, (struct sockaddr *)serv_addr, cur->ai_addrlen) != 0 ) {
-            close(listeningSocket);
-            LOG(ERROR, "shttp: Could not bind to interface!");
-            continue;
-        }
-
-        // start listening
-        if (listen(listeningSocket, SHTTP_MAX_QUEUED_CONNECTIONS) != 0){
-            close(listeningSocket);
-            LOG(ERROR, "shttp: Listening failed!");
-            continue;
-        }
-
-        // we are listening, stop iterating
-        freeaddrinfo(addrList);
-        return true;
-    }
-
-    // if we get here we exhausted the address list
-    freeaddrinfo(addrList);
-    return false;
+    // we are listening
+    return true;
 }
 
 void readTask(void *userData) {
-    int socket;
+    struct netconn *conn;
+    struct netbuf *inbuf = NULL;
     char *recv_buffer;
-    int result;
+    uint16_t buflen;
+    err_t err;
     shttpParserState *parser;
 
     while(1) {
         // fetch a connection from the queue
-        xQueueReceive(connectionQueue, &socket, portMAX_DELAY);
-
-        // allocate receive buffer
-        recv_buffer = malloc(SHTTP_MAX_RECV_BUFFER);
-        if (recv_buffer == NULL) {
-            LOG(ERROR, "shttp: Out of memory, terminating connection");
-            close(socket);
-            continue;
-        }
+        xQueueReceive(connectionQueue, &conn, portMAX_DELAY);
 
         // create a parser
         parser = shttp_parser_init_state();
 
         // receive data
         while(1) {
-            result = recv(socket, recv_buffer, SHTTP_MAX_RECV_BUFFER, 0);
-            if (result <= 0) {
-#if HAVE_ERRNO == 1
-                if ((errno == EPIPE) || (errno == ECONNRESET) || (result == 0)) {
-                    client disconnected
-                    LOG(DEBUG, "shttp: client disconnected");
-                    close(socket);
-                    break;
-                }
-                
-                if (errno == EINTR) {
-                    // interrupted, try again
-                    continue;
-                }
-#else
-                LOG(DEBUG, "shttp: client disconnected");
-                close(socket);
-                break;
-#endif /* HAVE_ERRNO */
+            err = netconn_recv(conn, &inbuf);
 
+            if (err != ERR_OK) {
+                LOG(DEBUG, "shttp: client disconnected");
+                break;
             } else {
+                netbuf_data(inbuf, (void **)&recv_buffer, &buflen);
+
                 // received some bytes, run parser on it
-                if (!shttp_parse(parser, recv_buffer, result, socket)) {
+                if (!shttp_parse(parser, recv_buffer, buflen, conn)) {
                     // parser thinks we should close the connection
                     LOG(DEBUG, "shttp: parse called for quit");
                     break;
@@ -149,17 +74,17 @@ void readTask(void *userData) {
         }
 
         // clean up
-        free(recv_buffer);
+        netconn_close(conn);
+        netbuf_delete(inbuf);
+        netconn_delete(conn);
         shttp_destroy_parser(parser);
-        close(socket);
         LOG(DEBUG, "shttp: connection closed");
     }
 }
 
 ICACHE_FLASH_ATTR void shttp_listen(shttpConfig *config) {
-    struct sockaddr_in clientAddr;
-    socklen_t addrLen;
-    int incomingSocket;
+    struct netconn *incoming;
+    err_t err;
 
     // bind and listen
     bool result = bind_and_listen(config->port);
@@ -172,7 +97,8 @@ ICACHE_FLASH_ATTR void shttp_listen(shttpConfig *config) {
     connectionQueue = xQueueCreate(SHTTP_MAX_QUEUED_CONNECTIONS, sizeof(int));
     if (connectionQueue == NULL) {
         LOG(ERROR, "shttp: Could not create connection queue, terminating");
-        close(listeningSocket);
+        netconn_close(listeningConn);
+        netconn_delete(listeningConn);
         return;
     }
 
@@ -180,7 +106,8 @@ ICACHE_FLASH_ATTR void shttp_listen(shttpConfig *config) {
     if (xTaskCreate(readTask, "shttp.read", SHTTP_STACK_SIZE, NULL, SHTTP_PRIO, &dataTask) != pdPASS) {
         LOG(ERROR, "shttp: Could not create data processing task, terminating");
         vQueueDelete(connectionQueue);
-        close(listeningSocket);
+        netconn_close(listeningConn);
+        netconn_delete(listeningConn);
         return;
     }
 
@@ -189,24 +116,18 @@ ICACHE_FLASH_ATTR void shttp_listen(shttpConfig *config) {
 
     // accept connections
     while(1) {
-        addrLen = sizeof(clientAddr);
 
         // this blocks until a client connects
-        incomingSocket = accept(listeningSocket, (struct sockaddr *) &clientAddr, &addrLen);
-        if (incomingSocket < 0) {
-#if HAVE_ERRNO == 1
-            if (errno == EINTR) {
-                continue;
-            }
-#endif /* HAVE_ERRNO */
+        err = netconn_accept(listeningConn, &incoming);
+        if (err == ERR_OK) {
+            LOG(TRACE, "shttp: Client connected, signaling communications thread");
+            xQueueSendToBack(connectionQueue, &incoming, portMAX_DELAY);
+        } else {
             LOG(ERROR, "shttp: Could not accept connection, terminating");
             vTaskDelete(dataTask);
             vQueueDelete(connectionQueue);
-            close(listeningSocket);
-            return;
+            netconn_close(listeningConn);
+            netconn_delete(listeningConn);
         }
-
-        LOG(TRACE, "shttp: Client connected, signaling communications thread");
-        xQueueSendToBack(connectionQueue, &incomingSocket, portMAX_DELAY);
     }
 }

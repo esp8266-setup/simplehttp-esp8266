@@ -123,7 +123,7 @@ ICACHE_FLASH_ATTR static void shttp_parse_url_parameters(char *path, shttpRoute 
 
 }
 
-ICACHE_FLASH_ATTR void shttp_exec_route(char *path, shttpMethod method, shttpRequest *request, int socket) {
+ICACHE_FLASH_ATTR void shttp_exec_route(char *path, shttpMethod method, shttpRequest *request, struct netconn *conn) {
     // find a route
     shttpRoute *route = shttp_find_route(path, method, request);
     LOG(TRACE, "shttp: Route %x", route);
@@ -131,7 +131,7 @@ ICACHE_FLASH_ATTR void shttp_exec_route(char *path, shttpMethod method, shttpReq
     // no route found return 404
     if (!route) {
         LOG(TRACE, "shttp: no route, returning 404");
-        shttp_write_response(shttp_empty_response(shttpStatusNotFound), socket);
+        shttp_write_response(shttp_empty_response(shttpStatusNotFound), conn);
     }
 
     // parse url parameters
@@ -139,7 +139,7 @@ ICACHE_FLASH_ATTR void shttp_exec_route(char *path, shttpMethod method, shttpReq
     LOG(TRACE, "shttp: %d URL path parameters", request->numPathParameters);
 
     // call callback and return response
-    shttp_write_response(route->callback(request), socket);
+    shttp_write_response(route->callback(request), conn);
 }
 
 //

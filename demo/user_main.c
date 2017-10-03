@@ -6,6 +6,13 @@
 #include <simplehttp/http.h>
 #define BUF_SZ 200
 
+#include <lwip/ip6_addr.h>
+#include <lwip/ip4_addr.h>
+#include <lwip/netif.h>
+
+// internal netif list of lwip
+extern struct netif *netif_list;
+
 void startup(void *userData);
 
 /******************************************************************************
@@ -90,7 +97,7 @@ static shttpResponse *helloName(shttpRequest *request) {
         printf("Param: %s\n", request->pathParameters[0]);
         
         // return plain text response
-        return shttp_text_response(shttpStatusOK, responseBuffer);
+        return shttp_text_response(shttpStatusOK, responseBuffer, true);
     } else {
         // no parameter, bad request, no treats for you!
         return BAD_REQUEST;
@@ -99,7 +106,7 @@ static shttpResponse *helloName(shttpRequest *request) {
 
 // return simple greeting without name
 static shttpResponse *helloUnknown(shttpRequest *request) {
-    return shttp_text_response(shttpStatusOK, "Hello you!");
+    return shttp_text_response(shttpStatusOK, "Hello you!", false);
 }
 
 // just a demo how to return a custom response for a wildcard
@@ -117,6 +124,10 @@ static shttpResponse *custom404(shttpRequest *request) {
 void user_init(void) {
     printf("SDK version:%s\n", system_get_sdk_version());
     wifi_set_event_handler_cb(wifi_event_handler_cb);
+
+    struct netif *interface = netif_list;
+    netif_create_ip6_linklocal_address(interface, 1);
+    netif_set_up(interface);
 }
 
 void startup(void *userData) {
@@ -127,7 +138,7 @@ void startup(void *userData) {
     config.hostName = "esp8266";
 
     // the port to use, default should be 80
-    config.port = "80";
+    config.port = 80;
 
     // we don't care if the url ends with a slash
     config.appendSlashes = 1;
